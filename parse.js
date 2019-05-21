@@ -1,11 +1,18 @@
+/**
+ * 
+ */
+const reserved = ["lambda", "if", "else", "then"]
+
+const { Token } = require('./TokenStream');
+ 
 const token = (type, value = null) => ({nextToken}) => {
   let [tok, tokType] = nextToken();
   if (tokType !== type) {
-    throw new Error(`Expected ${type} but got ${tokType}!`);
+    throw new Error(`Expected ${type.toString()} but got ${tokType.toString()}!`);
   }
 
   if (value && tok !== value) {
-    throw new Error(`Expected ${value} but got ${tok}!`);
+    throw new Error(`Expected ${value.toString()} but got ${tok.toString()}!`);
   }
 
   return tok;
@@ -118,16 +125,26 @@ const binaryForm = ({expect}) => {
   }
 }
 
-const progForm = ({expect, canExpect}) => {
-  expect(token(Token.RBRACK));
-  while (canExpect(token(Token.LBRACK))) {
-    args.push(expect(expressionForm));
-    expect(token(Token.SEMICOLON));
-  }
-  expect(token(Token.LBRACK));
+const expressionSequence = ({expect, canExpect}) => {
+  let prog = [];
+  do {
+    prog.push(expect(expressionForm));
+  } while (expect(token(Token.SEMICOLON)))
+  return prog;
 }
 
-const expressionForm = ({expectIfCan}) => {
+const progForm = ({expect, canExpect}) => {
+  expect(token(Token.RBRACK));
+  const prog = expect(expressionSequence);
+  expect(token(Token.LBRACK));
+
+  return {
+    type: 'prog',
+    prog
+  }
+}
+
+const expressionForm = ({expect, canExpect}) => {
   let precedenceOrder = [
     lambdaForm, conditionalForm, progForm, callForm, assignForm, binaryForm
   ];
@@ -136,4 +153,11 @@ const expressionForm = ({expectIfCan}) => {
     if (canExpect(form)) return expect(form);
   }
   throw new Error("Cannot parse expression!");
+}
+
+module.exports.parse = function({expect}) {
+  return {
+    type: 'prog',
+    prog: expect(expressionSequence)
+  }
 }
