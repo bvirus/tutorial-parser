@@ -1,0 +1,5 @@
+<div id="app">
+  <ul $in="items" $apply="map x => x.text">
+    <li $render="self.body"></li>
+  </ul>
+</div>

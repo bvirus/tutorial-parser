@@ -1,26 +1,36 @@
 const { isWhitespace } = require('./InputStream');
 
+
 let specialSymbols = {}
 let Token = {}
+let operators = {};
 
 function addToken(name, str) {
   const sym = Symbol(name);
   Token[name] = sym;
   if (str) specialSymbols[str] = name;
-  return
+  return sym;
 }
+
+addToken("OPERATOR")
+function addOperators(...ops) {
+  ops.forEach(op => {
+    operators[op] = true;
+    specialSymbols[op] = Token.OPERATOR
+  });
+}
+
+addOperators("+", "-", "*", "/", "=")
 
 let numChars = '0123456789.';
 
 addToken("IDENT")
-addToken("LPAREN", "(")
-addToken("RPAREN", ")")
-addToken("LBRACK", "{")
-addToken("RBRACK", "}")
+addToken("RPAREN", "(")
+addToken("LPAREN", ")")
+addToken("RBRACK", "{")
+addToken("LBRACK", "}")
 addToken("SEMICOLON", ";")
-addToken("PLUSSIGN", "+")
 addToken("COMMA", ",")
-addToken("EQUALS", "=")
 addToken("QUOTE", '"')
 addToken("STR")
 addToken("NUM")
@@ -45,6 +55,7 @@ function readNumber(input) {
   return parseFloat(str)
 }
 
+// add line number knowledge here
 function advance(input, buffer) {
   if (input.eof()) buffer.push(['', Token.EOF]);
   let char = input.peek();
@@ -52,11 +63,13 @@ function advance(input, buffer) {
     buffer.push([readString(input), Token.STR]);
   } else if (numChars.indexOf(char) >= 0) {
     buffer.push([readNumber(input), Token.NUM]);
+  } else if(operators[char]) {
+    buffer.push([input.next(), Token.OPERATOR]);
   } else if (specialSymbols[char]) {
     buffer.push([input.next(), Token[specialSymbols[char]]]);
   } else if (isWhitespace(char)) {
     input.next();
-    return advance();
+    return advance(input, buffer);
   } else {
     let identBuf = input.next();
     while (!input.eof() 
@@ -71,9 +84,12 @@ function advance(input, buffer) {
 function TokenStream(input) {
   let buffer = [];
   
-  return function getToken(pos) {
-    while (buffer.length <= pos) advance(input, buffer);
-    return buffer[pos];
+  return {
+    getToken(pos) {
+      while (buffer.length <= pos && !input.eof()) advance(input, buffer);
+      if (buffer.length <= pos) return ['', Token.EOF];
+      else return buffer[pos];
+    }
   }
 }
 

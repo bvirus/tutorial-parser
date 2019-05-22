@@ -2,22 +2,38 @@
  * 
  */
 const reserved = ["lambda", "if", "else", "then"]
-
+const { ParseError } = require('./Parser');
 const { Token } = require('./TokenStream');
  
-const token = (type, value = null) => ({nextToken}) => {
-  let [tok, tokType] = nextToken();
+const token = (type, value = null) => (parser) => {
+  let [tok, tokType] = parser.nextToken();
+
   if (tokType !== type) {
-    throw new Error(`Expected ${type.toString()} but got ${tokType.toString()}!`);
+    throw new ParseError(`Expected ${type.toString()} but got ${tokType.toString()}, with value ${tok}!`);
   }
 
   if (value && tok !== value) {
-    throw new Error(`Expected ${value.toString()} but got ${tok.toString()}!`);
+    throw new ParseError(`Expected ${value.toString()} but got ${tok.toString()}!`);
   }
 
   return tok;
 }
 
+const booleanForm = ({expect, canExpect}) => {
+  let val;
+  if (canExpect(token(Token.IDENT, 'true'))) {
+    expect(token(Token.IDENT));
+    val = true;
+  } else {
+    expect(token(Token.IDENT, 'false'));
+    val = false;
+  }
+
+  return {
+    type: 'bool',
+    value: val
+  }
+}
 
 const conditionalForm = ({expect, canExpect}) => {
   expect(token(Token.IDENT, 'if'));
@@ -32,7 +48,9 @@ const conditionalForm = ({expect, canExpect}) => {
     then
   };
 
-  if (canExpect(token(Token.IDENT, 'else'))) {
+  const elseTok = token(Token.IDENT, "else");
+  if (canExpect(elseTok)) {
+    expect(elseTok);
     ret.else = expect(expressionForm);
   }
 
@@ -50,7 +68,7 @@ const numberForm = ({expect}) => {
 const stringForm = ({expect}) => {
   return {
     type: 'string',
-    value: expect(Token.STR)
+    value: expect(token(Token.STR))
   }
 }
 
@@ -66,17 +84,19 @@ const identForm = ({expect}) => {
   }
 }
 
-const lambdaForm = ({expect}) => {
+const lambdaForm = ({expect, canExpect}) => {
+  const comma = token(Token.COMMA);
+
   let ident = expect(token(Token.IDENT, 'lambda'));
-  expect(Token.RPAREN);
+  expect(token(Token.RPAREN));
 
   let args = [];
-  while (canExpect(token(Token.IDENT))) {
-    if (args.length > 0) expect(token(Token.COMMA));
-    let ident = expect(token(Token.IDENT))
+  while (canExpect(identForm)) {
+    let ident = expect(identForm);
     args.push(ident);
+    if (canExpect(comma)) expect(comma);
   }
-  expect(Token.LPAREN);
+  expect(token(Token.LPAREN));
   let body = expect(expressionForm);
   return {
     type: 'lambda',
@@ -85,14 +105,16 @@ const lambdaForm = ({expect}) => {
   }
 }
 
-const callForm = ({expect, canExpect}) => {
-  let func = expect(expressionForm);
-  expect(token(Tokens.LPAREN));
+const callForm = ({expect, canExpect}) => {  
+  let func = expect(identForm);
+  expect(token(Token.RPAREN));
+
   let args = [];
-  while (canExpect(token(Token.LPAREN))) {
-    if (args.length > 0) expect(token(Token.COMMA));
+  while (!canExpect(token(Token.LPAREN))) {
     args.push(expect(expressionForm));
+    if (canExpect(token(Token.COMMA))) expect(token(Token.COMMA));
   }
+  expect(token(Token.LPAREN));
   return {
     type: 'call',
     func,
@@ -102,7 +124,7 @@ const callForm = ({expect, canExpect}) => {
 
 const assignForm = ({expect}) => {
   let left = expect(token(Token.IDENT));
-  expect(token(Token.EQUALS));
+  expect(token(Token.OPERATOR, "="));
   let right = expect(expressionForm);
 
   return {
@@ -113,9 +135,11 @@ const assignForm = ({expect}) => {
   }
 }
 
-const binaryForm = ({expect}) => {
-  let left = expect(token(Token.IDENT));
-  let operator = expect(operator);
+const binaryForm = ({expect, canExpect}) => {
+  let left;
+  if (canExpect(numberForm)) left = expect(numberForm);
+  else left = expect(identForm);
+  let operator = expect(token(Token.OPERATOR));
   let right = expect(expressionForm)
   return {
     type: 'binary',
@@ -127,9 +151,12 @@ const binaryForm = ({expect}) => {
 
 const expressionSequence = ({expect, canExpect}) => {
   let prog = [];
-  do {
+  
+  while (canExpect(expressionForm)) {
     prog.push(expect(expressionForm));
-  } while (expect(token(Token.SEMICOLON)))
+    expect(token(Token.SEMICOLON));
+  }
+  
   return prog;
 }
 
@@ -144,15 +171,37 @@ const progForm = ({expect, canExpect}) => {
   }
 }
 
-const expressionForm = ({expect, canExpect}) => {
+
+// to enable this syntax:
+// test()(x)
+// I need to extend callForm
+const expressionForm = (parser) => {
+  const {expect, canExpect} = parser;
   let precedenceOrder = [
-    lambdaForm, conditionalForm, progForm, callForm, assignForm, binaryForm
+    // lambdaForm, conditionalForm, progForm, callForm, assignForm, binaryForm,
+    // identForm, numberForm, stringForm
+    progForm, lambdaForm, 
+    callForm, binaryForm, assignForm, 
+    conditionalForm, numberForm, stringForm, booleanForm, identForm
   ];
 
   for (let form of precedenceOrder) {
-    if (canExpect(form)) return expect(form);
+    // console.log(`trying ${form.name}`);
+    if (canExpect(form)) {
+      // console.log(`using ${form.name}`)
+      return expect(form);
+    } else {
+      // console.log(`not ${form.name}, because ${parser.lastError}`)
+    }
   }
-  throw new Error("Cannot parse expression!");
+  // console.log(parser.lastError)
+  throw new ParseError("Cannot parse expression!");
+}
+
+module.exports = {
+  expressionForm, progForm, expressionSequence, 
+  binaryForm, assignForm, callForm, lambdaForm, 
+  identForm, stringForm, numberForm, conditionalForm
 }
 
 module.exports.parse = function({expect}) {

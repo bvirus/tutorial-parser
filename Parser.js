@@ -1,18 +1,33 @@
-function Parser(getToken, pos = 0, depth = 0) {
+class ParseError extends Error {
+  constructor(...params) {
+    super(...params);
+
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ParseError);
+    }
+
+    this.name = 'ParseError';
+    // Custom debugging information
+    // TODO: Put line and column number here
+  }
+}
+
+function Parser(tokens, pos = 0, depth = 0) {
   let parser = {
     nextToken() {
-      return getToken(pos++)
+      return tokens.getToken(pos++)
     },
+    lastError: null,
     expect(f) {
       return f(parser);
     },
-    canExpect(f, ) {
-      let p = Parser(getToken, pos);
+    canExpect(f) {
+      let p = Parser(tokens, pos);
       try {
         p.expect(f);
         return true;
       } catch (e) {
-        // console.log(e)
+        parser.lastError = e;
         return false;
       }
     }
@@ -21,4 +36,4 @@ function Parser(getToken, pos = 0, depth = 0) {
   return parser;
 }
 
-module.exports = { Parser };
+module.exports = { Parser, ParseError };
