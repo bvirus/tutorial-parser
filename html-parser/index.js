@@ -15,7 +15,7 @@ const IDENT     = Symbol.for("IDENT");
 const OPERATOR  = Symbol.for("OPERATOR");
 const STR       = Symbol.for("STR");
 const KEYWORD   = Symbol.for("KEYWORD");
-const BOOL   = Symbol.for("BOOL");
+const BOOL      = Symbol.for("BOOL");
 
 const makeToken = (value, type) => ({value, type});
 
@@ -140,7 +140,9 @@ function parseTag(s) {
 
 }
 
-let s = tokenStream(charStream(require('fs').readFileSync('./test.html').toString()));
+let s = tokenStream(
+          charStream(
+            require('fs').readFileSync('./test.html').toString()));
 let char;
 // while (!s.eof()) console.log(s.next())
 let tree = parse(s);

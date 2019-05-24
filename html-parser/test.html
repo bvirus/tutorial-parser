@@ -1,5 +1,49 @@
-<div id="app">
-  <ul $in="items" $apply="map x => x.text">
-    <li $render="self.body"></li>
-  </ul>
-</div>
+#import { formData } from 'form-control';
+
+<form-control name="TodoList" $in="[list]" $out="[addTodo]"> 
+  <div id="app">
+<!--     <form $apply="getClicks(this) | click$"></form> -->
+          <form $event=":submit | formData | addTodo()"></form>
+    <ul>
+      <!-- <li $apply="{map x => x.text}">${x}</li> -->
+      <li $map="x => x.text | todoItem">${todoItem}</li>
+    </ul>
+  </div>
+</form-control>
+
+#export { TodoList };
+
+<script>
+import { formData } from 'form-control';
+
+const list = store([]);
+
+function addTodo(todoText) {
+  list.push(todoText);
+}
+
+export function TodoList(output, [list], [addTodo]) {
+  const div = output.create("div#app");
+  const form = div.create('form');
+  getEventStream(form, 'submit').pipe(formData).subscribe(addTodo);
+  list.subscribe(l => writeList())
+  
+  return output.stopper();
+}
+let root = formControl(document.querySelector("#root"));
+let stop = TodoList(root, [list], [addTodo]);
+
+</script>
+
+
+#import {formControl, splitPanel} from 'FormControl'
+<form-control $import="{ max: Math.max, min: Math.min}" name="LCS">
+  <split-panel>
+    <left>
+      <slider name="age" value=(in.age) $out="out.age" />
+      <slider name="smokeRange" 
+              min="max(in.age, in.smokeRange.min)" `
+              max="min(in.age, in.smokeRange.min)" $out="out.smokeRange"/>
+    </left>
+  </split-panel>
+</form-control>
